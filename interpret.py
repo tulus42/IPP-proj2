@@ -1,4 +1,5 @@
 from sys import *
+import re
 import xml.etree.ElementTree as ET
 
 
@@ -6,12 +7,18 @@ src_file = ""
 input_file = ""
 stats_file = ""
 
+global_frame = {}
+temporary_frame = None
+local_frame = []
+
+
 instruction_counter = 1
+calling_stack = 0
 
 
-#################
+############################################################
 # checking correctness of arguments
-#################
+############################################################
 def check_arguments2(argv, arguments_dic):
     global src_file
     global input_file
@@ -130,13 +137,208 @@ def read_from_stdin():
         if not line:
             break
     
-    print(string)
     return string
 
 
-#################
+############################################################
+# instruction functions
+############################################################
+def check_var(argument):
+    arg_type = argument[0]
+    var = argument[1]
+
+    if arg_type != "var":
+        exit(32)
+
+    if re.sub(r"[GTL]F@[\w_$%&*?!-]+", "", var) == "":
+        result = var.split("@")
+        return result
+         
+    else:
+        print("Neplatna premenna", var)
+        exit(32)
+
+
+def check_frame(frame, variable):
+    if frame == "GF":
+        if variable not in global_frame:
+            exit(54)
+
+    elif frame == "TF":
+        if temporary_frame == None:
+            exit(55)
+        elif variable not in temporary_frame:
+            exit(54)
+
+    elif frame == "LF":
+        if local_frame == []:
+            exit(55)
+        elif variable not in local_frame[-1]:
+            exit(54)
+
+    else:
+        exit(32)
+
+    return
+
+
+def get_var_value(frame, variable):
+    if frame == "GF":
+        return global_frame[variable]
+    elif frame == "TF":
+        return temporary_frame[variable]
+    elif frame == "LF":
+        return local_frame[-1][variable]
+    else:
+        exit(99)
+
+# returns value of symbol or variable
+def check_symb(argument):
+    arg_type = argument[0]
+    symb = argument[1]
+
+    if arg_type == "int":
+        if re.sub(r"[\d]+", "", symb) != "":
+            print("nespravny argument int")
+            exit(32)
+
+    elif arg_type == "string":
+        if re.sub(r"[^#\\\s]+", "", symb) != "":
+            print("nespravny argument string")
+            exit(32)
+
+    elif arg_type == "bool":
+        if symb != "true" or symb != "false":
+            print("nespravny argument bool")
+            exit(32)
+
+    elif arg_type == "nil":
+        if symb != "nil":
+            print("nespravny argument nil")
+            exit(32)
+
+    elif arg_type == "var":
+        variable = check_var(argument)[1]
+        frame = variable[0]
+        variable = variable[1]
+
+        check_frame(frame, variable)
+        return get_var_value(frame, variable)
+        
+    else:
+        print("argument nevyhovuje ziadnej moznosti")
+        exit(32)
+
+    return symb
+
+
+def update_frame(frame, var, value):
+    global global_frame
+    global temporary_frame
+    global local_frame
+    
+    if frame == "GF":
+        global_frame[var] = value
+    elif frame == "TF":
+        temporary_frame[var] = value
+    elif frame == "LF":
+        local_frame[-1][var] = value
+    else:
+        exit(99)
+
+
+# DEFVAR ####################
+def handle_defvar(arguments):
+    global global_frame
+    global temporary_frame
+    global local_frame
+
+    if len(arguments) != 1:
+        print("nespravny pocet argumentov")
+        exit(32)
+
+    whole_var = check_var(arguments[1])
+    frame = whole_var[0]
+    variable = whole_var[1]
+
+    if frame == "GF":
+        if variable in global_frame:
+            exit(52)
+        global_frame.update({variable: None})
+
+    elif frame == "TF":
+        if temporary_frame == None:
+            exit(55)
+        elif variable in temporary_frame:
+            exit(52)
+        temporary_frame.update({variable: None})
+
+    elif frame == "LF":
+        if local_frame == []:
+            exit(55)
+        elif variable in local_frame[-1]:
+            exit(52)
+        local_frame[-1].update({variable: None})
+    else:
+        exit(32)
+
+
+# MOVE #######################
+def handle_move(arguments):
+    global global_frame
+    global temporary_frame
+    global local_frame
+
+    if len(arguments) != 2:
+        print("nespravny pocet argumentov")
+        exit(32)
+
+    whole_var = check_var(arguments[1])
+    frame1 = whole_var[0]
+    variable1 = whole_var[1]
+
+    symb = check_symb(arguments[2])     # get value from 2. argument
+
+    check_frame(frame1, variable1)      # check if variable exist
+
+    update_frame(frame1, variable1, symb)
+
+
+
+# PUSHFRAME #######################
+def handle_pushframe():
+    global temporary_frame
+    global local_frame
+
+    local_frame.append(temporary_frame)
+    temporary_frame = None
+
+
+# POPFRAME #######################
+def handle_popframe():
+    global temporary_frame
+    global local_frame
+
+    if local_frame != []:
+        temporary_frame = local_frame[-1]
+    else:
+        exit(55)
+
+# CALL ###########################
+def handle_call():
+    global instruction_counter
+    global calling_stack
+
+    check_label()
+
+    calling_stack.append(instruction_counter)
+
+
+
+
+###################################################################
 # handling instructions
-#################
+###################################################################
 def get_highest_order_number(program):
     top = 0
 
@@ -146,43 +348,67 @@ def get_highest_order_number(program):
 
     return top
 
+# temporary functions
+def get_instruction_dictionary(instruction):
+    dic = {}
+
+    for argument in instruction:
+        dic.update({int(argument.tag[-1]): [argument.attrib["type"], argument.text]})
+
+    return dic
+
 
 def get_program_dictionary(program):
     dic = {}
 
     for instruction in program:
-        dic.update({int(instruction.attrib["order"]): instruction})
+        new_instruction = get_instruction_dictionary(instruction)
+
+        dic.update({int(instruction.attrib["order"]): [instruction.attrib["opcode"].upper(), new_instruction]})
 
     return dic
 
 
 def instruction_switch(instruction):
-    opcode = instruction.attrib["opcode"].upper()
+    global global_frame
+    global temporary_frame
+    global local_frame
 
+    opcode = instruction[0]
+    arguments = instruction[1]
 
     ###########
     # 6.4.1 ramce, volanie funkcii
     if opcode == "MOVE":
-        handle_move()
+        handle_move(arguments)
+        
     elif opcode == "CREATEFRAME":
-        handle_createframe()
+        temporary_frame = {}
+        
     elif opcode == "PUSHFRAME":
         handle_pushframe()
+        
     elif opcode == "POPFRAME":
         handle_popframe()
+
     elif opcode == "DEFVAR":
-        handle_defvar()
+        handle_defvar(arguments)
+
     elif opcode == "CALL":
         handle_call()
+        
     elif opcode == "RETURN":
-        handle_return()
+        #handle_return()
+        pass
 
     ###########
     # 6.4.2 datovy zasobnik
     elif opcode == "PUSHS":
-        handle_pushs()
+        #handle_pushs()
+        pass
     elif opcode == "POPS":
-        handle_pops()
+        #handle_pops()
+        pass
         
     ###########
     # 6.4.3 aritmeticke, relacne, booleovske a konverzne instrukcie
@@ -252,7 +478,7 @@ def instruction_switch(instruction):
     elif opcode == "BREAK":
         pass
 
-    else
+    else:
         exit(32)
 
 
@@ -266,10 +492,8 @@ def handle_instructions(program):
 
     program = get_program_dictionary(program) 
 
+    print(program)
     
-
-    print(program[2].attrib)
-
     while instruction_counter <= top_order:
 
         instruction_switch(program[instruction_counter])
@@ -283,12 +507,11 @@ def handle_instructions(program):
 
 
 
-
+########################
 ######### MAIN #########
 
 
 arguments_dic = check_arguments(argv)
-print(arguments_dic)
 
 if not arguments_dic["source"] or not arguments_dic["input"]:
     if not arguments_dic["source"]:
@@ -303,15 +526,19 @@ program = ET.fromstring(src_file)
 handle_instructions(program)
 
 
-for instruction in program:
-    print(instruction.tag)
-    print(instruction.attrib["order"])
+"""for instruction in program:
+    print("Instruction", instruction.attrib["order"])
     print(instruction.attrib["opcode"])
-    print(instruction.text)
+    print("Len(instruction):", len(instruction))
+    # print(instruction[0].text)
     for argument in instruction:
-        print(argument.tag)
+        print("Arg", argument.tag[-1])
         print(argument.attrib)
-        print(argument.text)
+        print(argument.text)"""
+
+print("\nGF:",global_frame)
+
+
 
 
 
