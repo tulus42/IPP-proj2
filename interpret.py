@@ -11,10 +11,10 @@ global_frame = {}
 temporary_frame = None
 local_frame = []
 
-
 instruction_counter = 1
-calling_stack = 0
+calling_stack = []
 
+label_dict = {}
 
 ############################################################
 # checking correctness of arguments
@@ -140,6 +140,23 @@ def read_from_stdin():
     return string
 
 
+def get_labels(program):
+    global label_dict
+
+    for i in program:
+        instruction = program[i]
+        if instruction[0].upper() == "LABEL":
+            arguments = instruction[1]
+            
+            if len(arguments) != 1:
+                exit(32)
+
+            if arguments[1][0] == "label":
+                label_name = arguments[1][1]
+
+                label_dict.update({label_name: i})
+
+
 ############################################################
 # instruction functions
 ############################################################
@@ -160,6 +177,10 @@ def check_var(argument):
 
 
 def check_frame(frame, variable):
+    global global_frame
+    global temporary_frame
+    global local_frame
+
     if frame == "GF":
         if variable not in global_frame:
             exit(54)
@@ -182,7 +203,29 @@ def check_frame(frame, variable):
     return
 
 
+def check_if_any_value(frame, variable):
+    global global_frame
+    global temporary_frame
+    global local_frame
+
+    if frame == "GF":
+        if global_frame[variable] == None:
+            exit(56)
+    elif frame == "TF":
+        if temporary_frame[variable] == None:
+            exit(56)
+    elif frame == "LF":
+        if local_frame[-1][variable] == None:
+            exit(56)
+
+    return
+
+
 def get_var_value(frame, variable):
+    global global_frame
+    global temporary_frame
+    global local_frame
+
     if frame == "GF":
         return global_frame[variable]
     elif frame == "TF":
@@ -203,7 +246,9 @@ def check_symb(argument):
             exit(32)
 
     elif arg_type == "string":
-        if re.sub(r"[^#\\\s]+", "", symb) != "":
+        tmp_symb = symb
+        tmp_symb = re.sub(r"[\\\d{3}]*", "", tmp_symb)
+        if re.sub(r"[^#\\\s]+", "", tmp_symb) != "":
             print("nespravny argument string")
             exit(32)
 
@@ -218,11 +263,13 @@ def check_symb(argument):
             exit(32)
 
     elif arg_type == "var":
-        variable = check_var(argument)[1]
+        variable = check_var(argument)
         frame = variable[0]
         variable = variable[1]
 
         check_frame(frame, variable)
+        check_if_any_value(frame, variable)
+        
         return get_var_value(frame, variable)
         
     else:
@@ -245,6 +292,15 @@ def update_frame(frame, var, value):
         local_frame[-1][var] = value
     else:
         exit(99)
+
+
+def check_and_get_label(label_name):
+    global label_dict
+
+    if label_name not in label_dict:
+        exit(52)
+
+    return label_dict[label_name]
 
 
 # DEFVAR ####################
@@ -296,28 +352,34 @@ def handle_move(arguments):
     whole_var = check_var(arguments[1])
     frame1 = whole_var[0]
     variable1 = whole_var[1]
-
+    
     symb = check_symb(arguments[2])     # get value from 2. argument
-
+    
     check_frame(frame1, variable1)      # check if variable exist
-
+    
     update_frame(frame1, variable1, symb)
-
+    
 
 
 # PUSHFRAME #######################
-def handle_pushframe():
+def handle_pushframe(arguments):
     global temporary_frame
     global local_frame
+
+    if len(arguments) != 0:
+        exit(32)
 
     local_frame.append(temporary_frame)
     temporary_frame = None
 
 
 # POPFRAME #######################
-def handle_popframe():
+def handle_popframe(arguments):
     global temporary_frame
     global local_frame
+
+    if len(arguments) != 0:
+        exit(32)
 
     if local_frame != []:
         temporary_frame = local_frame[-1]
@@ -325,13 +387,23 @@ def handle_popframe():
         exit(55)
 
 # CALL ###########################
-def handle_call():
+def handle_call(arguments):
     global instruction_counter
     global calling_stack
 
-    check_label()
+    if len(arguments) != 1:
+        exit(32)
+
+    if "label" not in arguments[1]:
+        exit(32)
+
+    label_name = arguments[1]["label"]
+
+    label_number = check_and_get_label(label_name)
 
     calling_stack.append(instruction_counter)
+
+    instruction_counter = label_number
 
 
 
@@ -383,19 +455,19 @@ def instruction_switch(instruction):
         handle_move(arguments)
         
     elif opcode == "CREATEFRAME":
-        temporary_frame = {}
+        temporary_frame = {arguments}
         
     elif opcode == "PUSHFRAME":
-        handle_pushframe()
+        handle_pushframe(arguments)
         
     elif opcode == "POPFRAME":
-        handle_popframe()
+        handle_popframe(arguments)
 
     elif opcode == "DEFVAR":
         handle_defvar(arguments)
 
     elif opcode == "CALL":
-        handle_call()
+        handle_call(arguments)
         
     elif opcode == "RETURN":
         #handle_return()
@@ -487,10 +559,13 @@ def instruction_switch(instruction):
 
 def handle_instructions(program):
     global instruction_counter
+    global label_dict
     
     top_order = get_highest_order_number(program)
 
     program = get_program_dictionary(program) 
+
+    get_labels(program)
 
     print(program)
     
@@ -522,7 +597,6 @@ if not arguments_dic["source"] or not arguments_dic["input"]:
 
 program = ET.fromstring(src_file)
 
-
 handle_instructions(program)
 
 
@@ -537,6 +611,7 @@ handle_instructions(program)
         print(argument.text)"""
 
 print("\nGF:",global_frame)
+print("Labels:", label_dict)
 
 
 
