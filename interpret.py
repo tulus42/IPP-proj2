@@ -754,6 +754,8 @@ def handle_write(arguments):
     symb1 = check_symb(arguments[1])
     value1 = symb1[1]
 
+    print(value1, end='')
+
 
 # 6.4.5 ######################################################################
 # CONCAT #############################
