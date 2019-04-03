@@ -481,6 +481,7 @@ def handle_return(arguments):
         exit(56)
 
 
+# 6.4.2 ######################################################################
 # PUSHS ###########################
 def handle_pushs(arguments):
     global data_stack
@@ -517,7 +518,7 @@ def handle_pops(arguments):
         exit(56) 
 
 
-# 6.4.2 ######################################################################
+# 6.4.3 ######################################################################
 # ADD ###########################
 # SUB ###########################
 # MUL ###########################
@@ -721,7 +722,7 @@ def handle_str2int(arguments):
     # TODO
     
 
-# 6.4.2 ######################################################################
+# 6.4.4 ######################################################################
 # READ ###############################
 def handle_read(arguments):
     if len(arguments) != 2:
@@ -770,8 +771,235 @@ def handle_read(arguments):
 
 # WRITE #############################
 def handle_write(arguments):
-    pass
+    if len(arguments) != 1:
+        exit(32)
 
+    symb1 = check_symb(arguments[1])
+    value1 = symb1[1]
+
+    print(value1, end='')
+
+
+# 6.4.5 ######################################################################
+# CONCAT #############################
+def handle_concat(arguments):
+    if len(arguments) != 3:
+        exit(32)
+
+    # arg1
+    whole_var = check_var(arguments[1])
+
+    frame = whole_var[0]
+    variable_name = whole_var[1]
+
+    check_frame(frame, variable_name)      # check if variable exist
+
+    # arg2 
+    symb2 = check_symb(arguments[2])
+    type2 = symb2[0]
+    value2 = symb2[1]
+    # arg3
+    symb3 = check_symb(arguments[3])
+    type3 = symb3[0]
+    value3 = symb3[1]
+
+    if not (type2 == type3 == "string"):
+        exit(53)
+
+    update_frame(frame, variable_name, ["string", value2 + value3])
+
+
+# STRLEN #############################
+def handle_strlen(arguments):
+    if len(arguments) != 2:
+        exit(32)
+
+    # arg1
+    whole_var = check_var(arguments[1])
+
+    frame = whole_var[0]
+    variable_name = whole_var[1]
+
+    check_frame(frame, variable_name)      # check if variable exist
+
+    # arg2 
+    symb2 = check_symb(arguments[2])
+    type2 = symb2[0]
+    value2 = symb2[1]
+
+    if type2 != "string":
+        exit(53)
+
+    update_frame(frame, variable_name, ["int", len(value2)])
+
+
+# GETCHAR #############################
+def handle_getchar(arguments):
+    if len(arguments) != 3:
+        exit(32)
+
+    # arg1
+    whole_var = check_var(arguments[1])
+
+    frame = whole_var[0]
+    variable_name = whole_var[1]
+
+    check_frame(frame, variable_name)      # check if variable exist
+
+    # arg2 
+    symb2 = check_symb(arguments[2])
+    type2 = symb2[0]
+    value2 = symb2[1]
+    # arg3
+    symb3 = check_symb(arguments[3])
+    type3 = symb3[0]
+    value3 = symb3[1]
+
+    if type2 != "string" or type3 != "int":
+        exit(53)
+
+    if value3 > len(value2) - 1:
+        exit(58)
+
+    if value3 < 0:
+        exit(57)
+
+    update_frame(frame, variable_name, ["string", value2[value3]])
+    
+
+# SETCHAR #############################
+def handle_setchar(arguments):
+    if len(arguments) != 3:
+        exit(32)
+
+    # arg1
+    whole_var = check_var(arguments[1])
+
+    frame = whole_var[0]
+    variable_name = whole_var[1]
+
+    check_frame(frame, variable_name)      # check if variable exist
+
+    symb1 = check_symb(arguments[1])
+    type1 = symb1[0]
+    value1 = symb1[1]
+
+    # arg2 
+    symb2 = check_symb(arguments[2])
+    type2 = symb2[0]
+    value2 = symb2[1]
+    # arg3
+    symb3 = check_symb(arguments[3])
+    type3 = symb3[0]
+    value3 = symb3[1]
+
+    if not (type1 == type3 == "string") or type2 != "int":
+        exit(53)
+
+    if len(value1) == 0 or len(value1) - 1 < value2:
+        exit(58)
+
+    if value2 < 0:
+        exit(57)
+
+    new_string = value1
+    new_string[value2] = value3[0]
+
+    update_frame(frame, variable_name, ["string", new_string])
+
+
+# 6.4.6 ######################################################################
+# SETCHAR #############################
+def handle_type(arguments):
+    if len(arguments) != 2:
+        exit(32)
+
+    # arg1
+    whole_var = check_var(arguments[1])
+
+    frame = whole_var[0]
+    variable_name = whole_var[1]
+
+    check_frame(frame, variable_name)      # check if variable exist
+
+    # arg2 
+    symb2 = check_symb(arguments[2])
+    type2 = symb2[0]
+
+    update_frame(frame, variable_name, ["string", type2])
+
+
+# 6.4.7 ######################################################################
+# JUMP #############################
+def handle_jump(arguments):
+    global instruction_counter
+
+    if len(arguments) != 1:
+        exit(32)
+
+    label_type = arguments[1][0]
+    label_name = arguments[1][1]
+
+    if label_type != "label":
+        exit(32)
+
+    label_number = check_and_get_label(label_name)
+    instruction_counter = label_number
+
+
+# JUMPIFEQ #############################
+# JUMPIFNEQ ############################
+def handle_jump_if(arguments, operator):
+    global instruction_counter
+
+    if len(arguments) != 3:
+        exit(32)
+
+    # arg1
+    label_type = arguments[1][0]
+    label_name = arguments[1][1]
+
+    if label_type != "label":
+        exit(32)
+
+    label_number = check_and_get_label(label_name)
+
+    # arg2 
+    symb2 = check_symb(arguments[2])
+    type2 = symb2[0]
+    value2 = symb2[1]
+    # arg3
+    symb3 = check_symb(arguments[3])
+    type3 = symb3[0]
+    value3 = symb3[1]
+
+    if type2 != type3:
+        exit(53)
+
+    if value2 == value3:
+        if operator == "==":
+            instruction_counter = label_number
+    else:
+        if operator == "!=":
+            instruction_counter = label_number
+
+
+# EXIT #############################
+def handle_exit(arguments):
+    if len(arguments) != 1:
+        exit(32)
+
+    symb1 = check_symb(arguments[1])
+    type1 = symb1[0]
+    value1 = symb1[1]
+
+    if type1 != "int":
+        exit(32)
+
+    if value1 < 0 or value1 > 49:
+        exit(57)
+
+    exit(value1)
 
 
 ###################################################################
@@ -897,27 +1125,35 @@ def instruction_switch(instruction):
     ###########
     # 6.4.5 praca s retazcami
     elif opcode == "CONCAT":
-        pass
+        handle_concat(arguments)
+
     elif opcode == "STRLEN":
-        pass
+        handle_strlen(arguments)
+
     elif opcode == "GETCHAR":
-        pass
+        handle_getchar(arguments)
+
+    elif opcode == "SETCHAR":
+        handle_setchar(arguments)
 
     ###########
     # 6.4.6 praca s typmi
     elif opcode == "TYPE":
-        pass
+        handle_type(arguments)
 
     ###########
     # 6.4.7 riadenie toku programu
     elif opcode == "LABEL":
         pass
+
     elif opcode == "JUMP":
-        pass
+        handle_jump(arguments)
     elif opcode == "JUMPIFEQ":
-        pass
+        handle_jump_if(arguments, "==")
+        
     elif opcode == "JUMPIFNEQ":
-        pass
+        handle_jump_if(arguments, "!=")
+
     elif opcode == "EXIT":
         pass
         
