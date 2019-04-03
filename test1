@@ -5,13 +5,17 @@
     </instruction>
     <instruction order="2" opcode="MOVE">
         <arg1 type="var">GF@var</arg1>
-        <arg2 type="string">string\097</arg2>
+        <arg2 type="string"></arg2>
     </instruction>
-    <instruction order="3" opcode="MOVE">
+    <instruction order="3" opcode="READ">
         <arg1 type="var">GF@var</arg1>
-        <arg2 type="var">GF@var</arg2>
+        <arg2 type="type">int</arg2>
     </instruction>
-    <instruction order="4" opcode="LABEL">
+        <instruction order="4" opcode="READ">
+        <arg1 type="var">GF@var</arg1>
+        <arg2 type="type">bool</arg2>
+    </instruction>
+    <instruction order="5" opcode="LABEL">
         <arg1 type="label">ahoj</arg1>
     </instruction>
 </program>

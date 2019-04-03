@@ -1,5 +1,6 @@
 from sys import *
 import re
+import io
 import xml.etree.ElementTree as ET
 
 
@@ -10,6 +11,8 @@ stats_file = ""
 global_frame = {}
 temporary_frame = None
 local_frame = []
+
+data_stack = []
 
 instruction_counter = 1
 calling_stack = []
@@ -154,7 +157,10 @@ def get_labels(program):
             if arguments[1][0] == "label":
                 label_name = arguments[1][1]
 
-                label_dict.update({label_name: i})
+                if label_name not in label_dict:
+                    label_dict.update({label_name: i})
+                else:
+                    exit(52)
 
 
 ############################################################
@@ -221,7 +227,7 @@ def check_if_any_value(frame, variable):
     return
 
 
-def get_var_value(frame, variable):
+def get_var_value_and_type(frame, variable):
     global global_frame
     global temporary_frame
     global local_frame
@@ -235,10 +241,33 @@ def get_var_value(frame, variable):
     else:
         exit(99)
 
+
+def remove_escape_sequences(string):
+    esc_seq = re.findall(r"\\\d{3}", string)
+    words = re.split(r"\\\d{3}", string)
+
+    new_string = words[0]
+
+    for i in range(len(esc_seq)):
+        esc_seq[i] = chr(int(esc_seq[i][1:]))
+
+        new_string = new_string + esc_seq[i] + words[i+1]
+    
+    return new_string
+
+
+
 # returns value of symbol or variable
 def check_symb(argument):
     arg_type = argument[0]
     symb = argument[1]
+
+    if symb == None:
+        if arg_type == "string":
+            symb = ""
+        else:
+            exit(32) # TODO or maybe 56
+
 
     if arg_type == "int":
         if re.sub(r"[\d]+", "", symb) != "":
@@ -247,10 +276,13 @@ def check_symb(argument):
 
     elif arg_type == "string":
         tmp_symb = symb
-        tmp_symb = re.sub(r"[\\\d{3}]*", "", tmp_symb)
+        tmp_symb = re.sub(r"\\\d{3}", "", tmp_symb)
+        
         if re.sub(r"[^#\\\s]+", "", tmp_symb) != "":
             print("nespravny argument string")
             exit(32)
+        else:
+            symb = remove_escape_sequences(symb)
 
     elif arg_type == "bool":
         if symb != "true" or symb != "false":
@@ -270,13 +302,13 @@ def check_symb(argument):
         check_frame(frame, variable)
         check_if_any_value(frame, variable)
         
-        return get_var_value(frame, variable)
+        return get_var_value_and_type(frame, variable)
         
     else:
         print("argument nevyhovuje ziadnej moznosti")
         exit(32)
 
-    return symb
+    return [arg_type, symb]
 
 
 def update_frame(frame, var, value):
@@ -303,6 +335,23 @@ def check_and_get_label(label_name):
     return label_dict[label_name]
 
 
+def get_line():
+    global input_file
+
+    try:
+        new_line = input_file.readline()
+    
+        if new_line[-1] == "\n":
+            return new_line[:-1]
+        else:
+            return new_line
+
+    except Exception:
+        return ""
+
+
+
+# 6.4.1 ######################################################################
 # DEFVAR ####################
 def handle_defvar(arguments):
     global global_frame
@@ -338,7 +387,6 @@ def handle_defvar(arguments):
     else:
         exit(32)
 
-
 # MOVE #######################
 def handle_move(arguments):
     global global_frame
@@ -353,12 +401,24 @@ def handle_move(arguments):
     frame1 = whole_var[0]
     variable1 = whole_var[1]
     
-    symb = check_symb(arguments[2])     # get value from 2. argument
+    symb2 = check_symb(arguments[2])     # get value from 2. argument
+    type2 = symb2[0]
+    value2 = symb2[1]
+    print(symb2)
     
     check_frame(frame1, variable1)      # check if variable exist
     
-    update_frame(frame1, variable1, symb)
+    update_frame(frame1, variable1, symb2)
     
+
+# CREATEFRAME #######################
+def handle_createframe(arguments):
+    global temporary_frame
+    
+    if len(arguments) != 0:
+        exit(32)
+
+    temporary_frame = {}
 
 
 # PUSHFRAME #######################
@@ -406,10 +466,316 @@ def handle_call(arguments):
     instruction_counter = label_number
 
 
+# RETURN ###########################
+def handle_return(arguments):
+    global instruction_counter
+    global calling_stack
+
+    if len(arguments) != 0:
+        exit(32)
+
+    if len(calling_stack) > 0:
+        instruction_counter = calling_stack[-1]
+        del calling_stack[-1]
+    else:
+        exit(56)
+
+
+# PUSHS ###########################
+def handle_pushs(arguments):
+    global data_stack
+
+    if len(arguments) != 1:
+        exit(32)
+
+    symb = check_symb(arguments[1])
+
+    data_stack.append(symb)
+
+    
+# POPS ###########################
+def handle_pops(arguments):
+    global data_stack
+
+    if len(arguments) != 1:
+        exit(32)
+
+    if data_stack != []:
+        whole_var = check_var(arguments[1])
+
+        frame = whole_var[0]
+        variable = whole_var[1]
+        value = data_stack[-1]
+
+        del data_stack[-1]
+        
+        check_frame(frame, variable)      # check if variable exist
+        
+        update_frame(frame, variable, value)
+
+    else:
+        exit(56) 
+
+
+# 6.4.2 ######################################################################
+# ADD ###########################
+# SUB ###########################
+# MUL ###########################
+# IDIV ##########################
+
+def handle_maths(arguments, operator):
+    if len(arguments) != 3:
+        exit(32)
+
+    # arg1
+    whole_var = check_var(arguments[1])
+
+    frame = whole_var[0]
+    variable_name = whole_var[1]
+
+    check_frame(frame, variable_name)      # check if variable exist
+    
+    # arg2 
+    symb2 = check_symb(arguments[2])
+    type2 = symb2[0]
+    value2 = int(symb2[1])
+    # arg3
+    symb3 = check_symb(arguments[3])
+    type3 = symb3[0]
+    value3 = int(symb3[1])
+
+    if not (type2 == type3 == "int"):
+        exit(53)
+
+    if operator == "+":
+        update_frame(frame, variable_name, ["int", value2 + value3])
+    elif operator == "-":
+        update_frame(frame, variable_name, ["int", value2 - value3])
+    elif operator == "*":
+        update_frame(frame, variable_name, ["int", value2 * value3])
+    elif operator == "/":
+        if value3 == 0:
+            exit(57)
+        update_frame(frame, variable_name, ["int", value2 // value3])
+    else:
+        exit(99)
+
+
+# LT ############################
+# GT ############################
+# EQ ############################
+def handle_compare(arguments, operator):
+    if len(arguments) != 3:
+        exit(32)
+
+    # arg1
+    whole_var = check_var(arguments[1])
+
+    frame = whole_var[0]
+    variable_name = whole_var[1]
+
+    check_frame(frame, variable_name)      # check if variable exist
+    
+    # arg2 
+    symb2 = check_symb(arguments[2])
+    type2 = symb2[0]
+    value2 = symb2[1]
+    # arg3
+    symb3 = check_symb(arguments[3])
+    type3 = symb3[0]
+    value3 = symb3[1]
+
+    if type2 != type3:
+        exit(53)
+
+    result = "false"
+
+    if type2 == "int":
+        if operator == "<":
+            if int(value2) < int(value3):
+                result = "true"
+        elif operator == ">":
+            if int(value2) > int(value3):
+                result = "true"
+        elif operator == "=":
+            if int(value2) == int(value3):
+                result == "true"
+        else:
+            exit(99)
+
+    elif type2 == "string":
+        if operator == "<":
+            if value2 < value3:
+                result = "true"
+        elif operator == ">":
+            if value2 > value3:
+                result = "true"
+        elif operator == "=":
+            if value2 == value3:
+                result = "true"
+        else:
+            exit(99)
+
+    elif type2 == "bool":
+        if operator == "<":
+            if value2 < value3:         # TODO - check if valid
+                result = "true"
+        elif operator == ">":
+            if value2 > value3:         # TODO - check if valid
+                result = "true"
+        elif operator == "=":
+            if value2 == value3:
+                result = "true"
+        else:
+            exit(99)
+        
+    elif type2 == "nil":
+        if operator == "=":
+            if value2 == value3:
+                result == "true"
+        else:
+            exit(53)
+
+    else:
+        exit(99)
+
+    update_frame(frame, variable_name, ["bool", result])
+
+
+# AND ###########################
+# OR ############################
+def handle_and_or(arguments, operator):
+    if len(arguments) != 3:
+        exit(32)
+
+    # arg1
+    whole_var = check_var(arguments[1])
+
+    frame = whole_var[0]
+    variable_name = whole_var[1]
+
+    check_frame(frame, variable_name)      # check if variable exist
+    
+    # arg2 
+    symb2 = check_symb(arguments[2])
+    type2 = symb2[0]
+    value2 = symb2[1]
+    # arg3
+    symb3 = check_symb(arguments[3])
+    type3 = symb3[0]
+    value3 = symb3[1]
+
+    if not (type2 == type3 == "bool"):
+        exit(53)
+
+    tmp_val2 = True if value2 == "true" else False
+    tmp_val3 = True if value3 == "true" else False
+
+    if operator == "and":
+        result = tmp_val2 and tmp_val3
+    elif operator == "or":
+        result = tmp_val2 or tmp_val3
+    else:
+        exit(99)
+
+    result = "true" if result == True else "false"
+    update_frame(frame, variable_name, ["bool", result])
+    
+
+# NOT ###########################
+def handle_not(arguments):
+    if len(arguments) != 2:
+        exit(32)
+
+    # arg1
+    whole_var = check_var(arguments[1])
+
+    frame = whole_var[0]
+    variable_name = whole_var[1]
+
+    check_frame(frame, variable_name)      # check if variable exist
+    
+    # arg2 
+    symb2 = check_symb(arguments[2])
+    type2 = symb2[0]
+    value2 = symb2[1]
+
+    if type2 != "bool":
+        exit(53)
+
+    if value2 == "true":
+        update_frame(frame, variable_name, ["bool", "false"])
+    else:
+        update_frame(frame, variable_name, ["bool", "true"])
+
+
+# INT2CHAR ###########################
+def handle_int2char(arguments):
+    pass
+    # TODO
+
+
+# INT2CHAR ###########################
+def handle_str2int(arguments):
+    pass
+    # TODO
+    
+
+# 6.4.2 ######################################################################
+# READ ###############################
+def handle_read(arguments):
+    if len(arguments) != 2:
+        exit(32)
+
+    # arg1
+    whole_var = check_var(arguments[1])
+
+    frame = whole_var[0]
+    variable_name = whole_var[1]
+
+    check_frame(frame, variable_name)      # check if variable exist
+
+    readed_line = get_line()
+    
+    # arg2
+    if arguments[2][0] != "type":
+        print("nespravny typ")
+        exit(32)
+
+    new_type = arguments[2][1]
+    print(arguments[2])
+    print("typ:", new_type)
+
+    if new_type == "int":
+        try:
+            readed_line = int(readed_line)
+        except Exception:
+            readed_line = 0
+
+    elif new_type == "string":
+        pass
+
+    elif new_type == "bool":
+        if readed_line.upper == "TRUE":
+            readed_line = "true"
+        else:
+            readed_line = "false"
+
+    else:
+        print("chyba handle read")
+        exit(32)
+
+    update_frame(frame, variable_name, [new_type, readed_line])
+
+
+# WRITE #############################
+def handle_write(arguments):
+    pass
+
 
 
 ###################################################################
-# handling instructions
+# main handling instructions
 ###################################################################
 def get_highest_order_number(program):
     top = 0
@@ -455,7 +821,7 @@ def instruction_switch(instruction):
         handle_move(arguments)
         
     elif opcode == "CREATEFRAME":
-        temporary_frame = {arguments}
+        handle_createframe(arguments)
         
     elif opcode == "PUSHFRAME":
         handle_pushframe(arguments)
@@ -470,51 +836,63 @@ def instruction_switch(instruction):
         handle_call(arguments)
         
     elif opcode == "RETURN":
-        #handle_return()
-        pass
+        handle_return(arguments)
+        
 
     ###########
     # 6.4.2 datovy zasobnik
     elif opcode == "PUSHS":
-        #handle_pushs()
-        pass
+        handle_pushs(arguments)
+        
     elif opcode == "POPS":
-        #handle_pops()
-        pass
+        handle_pops(arguments)
+       
         
     ###########
     # 6.4.3 aritmeticke, relacne, booleovske a konverzne instrukcie
     elif opcode == "ADD":
-        pass
+        handle_maths(arguments, "+")
+        
     elif opcode == "SUB":
-        pass
+        handle_maths(arguments, "-")
+       
     elif opcode == "MUL":
-        pass
+        handle_maths(arguments, "*")
+        
     elif opcode == "IDIV":
-        pass
+        handle_maths(arguments, "/")
+        
     elif opcode == "LT":
-        pass
+        handle_compare(arguments, "<")
+        
     elif opcode == "GT":
-        pass
+        handle_compare(arguments, ">")
+        
     elif opcode == "EQ":
-        pass
+        handle_compare(arguments, "=")
+
     elif opcode == "AND":
-        pass
+        handle_and_or(arguments, "and")
+
     elif opcode == "OR":
-        pass
+        handle_and_or(arguments, "or")
+
     elif opcode == "NOT":
-        pass
+        handle_not(arguments)
+
     elif opcode == "INT2CHAR":
-        pass
+        handle_int2char(arguments)
+
     elif opcode == "STR2INT":
-        pass
+        handle_str2int(arguments)
 
     ###########
     # 6.4.4 vytupne a vystupne instrukcie
     elif opcode == "READ":    
-        pass
+        handle_read(arguments)
+        
     elif opcode == "WRITE":
-        pass
+        handle_write(arguments)
 
     ###########
     # 6.4.5 praca s retazcami
@@ -568,6 +946,7 @@ def handle_instructions(program):
     get_labels(program)
 
     print(program)
+    print(program[2][1][2][1])
     
     while instruction_counter <= top_order:
 
@@ -593,7 +972,10 @@ if not arguments_dic["source"] or not arguments_dic["input"]:
         src_file = read_from_stdin()
 
     if not arguments_dic["input"]:
-        input_file = read_from_stdin()
+        input_file = None
+
+if arguments_dic["input"] == True:
+    input_file = io.StringIO(input_file)
 
 program = ET.fromstring(src_file)
 
