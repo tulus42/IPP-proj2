@@ -42,9 +42,11 @@ def check_arguments2(argv, arguments_dic):
                         src_file = string
 
                 except Exception:
+                    print("Chyba pri otvarani suboru")
                     exit(11)
 
             else:
+                print("Neplatny argument source")
                 exit(10)
             
         elif "--input" in i and not arguments_dic["input"]:
@@ -60,9 +62,11 @@ def check_arguments2(argv, arguments_dic):
                         input_file = string
 
                 except Exception:
+                    print("Chyba pri otvarani suboru")
                     exit(11)
 
             else:
+                print("Neplatny argument input")
                 exit(10)
 
         elif "--stats" in i and not arguments_dic["stats"]:
@@ -78,9 +82,11 @@ def check_arguments2(argv, arguments_dic):
                         stats_file = string
 
                 except Exception:
+                    print("Chyba pri otvarani suboru")
                     exit(11)
 
             else:
+                print("Neplatny argument stats")
                 exit(10)
 
         elif i == "--insts" and not arguments_dic["insts"]:
@@ -90,6 +96,7 @@ def check_arguments2(argv, arguments_dic):
             arguments_dic["vars"] = True
 
         else:
+            print("neplatny argument")
             exit(10)
 
     return arguments_dic
@@ -99,6 +106,7 @@ def check_arguments(argv):
     arguments_dic = {"help": False, "source": False, "input": False, "stats": False, "insts": False, "vars": False}
     
     if len(argv) < 2:
+        print("Argument missing")
         exit(10)
     
     elif len(argv) == 2:
@@ -114,9 +122,11 @@ def check_arguments(argv):
 
     
     if not arguments_dic["source"] and not arguments_dic["input"]:
+        print("Argument is missing: --source or --input")
         exit(10)
 
     if (arguments_dic["insts"] or arguments_dic["vars"]) and not arguments_dic["stats"]:
+        print("Argument is missing: --stats")
         exit(10)
 
     return arguments_dic
@@ -168,6 +178,7 @@ def check_var(argument):
         return result
          
     else:
+        print("Neplatna premenna", var)
         exit(32)
 
 
@@ -260,6 +271,7 @@ def check_symb(argument):
 
     if arg_type == "int":
         if re.sub(r"[\d]+", "", symb) != "":
+            print("nespravny argument int")
             exit(32)
 
     elif arg_type == "string":
@@ -267,16 +279,19 @@ def check_symb(argument):
         tmp_symb = re.sub(r"\\\d{3}", "", tmp_symb)
         
         if re.sub(r"[^#\\\s]+", "", tmp_symb) != "":
+            print("nespravny argument string")
             exit(32)
         else:
             symb = remove_escape_sequences(symb)
 
     elif arg_type == "bool":
         if symb != "true" or symb != "false":
+            print("nespravny argument bool")
             exit(32)
 
     elif arg_type == "nil":
         if symb != "nil":
+            print("nespravny argument nil")
             exit(32)
 
     elif arg_type == "var":
@@ -290,6 +305,7 @@ def check_symb(argument):
         return get_var_value_and_type(frame, variable)
         
     else:
+        print("argument nevyhovuje ziadnej moznosti")
         exit(32)
 
     return [arg_type, symb]
@@ -343,6 +359,7 @@ def handle_defvar(arguments):
     global local_frame
 
     if len(arguments) != 1:
+        print("nespravny pocet argumentov")
         exit(32)
 
     whole_var = check_var(arguments[1])
@@ -377,6 +394,7 @@ def handle_move(arguments):
     global local_frame
 
     if len(arguments) != 2:
+        print("nespravny pocet argumentov")
         exit(32)
 
     whole_var = check_var(arguments[1])
@@ -386,6 +404,7 @@ def handle_move(arguments):
     symb2 = check_symb(arguments[2])     # get value from 2. argument
     type2 = symb2[0]
     value2 = symb2[1]
+    print(symb2)
     
     check_frame(frame1, variable1)      # check if variable exist
     
@@ -693,15 +712,64 @@ def handle_not(arguments):
 
 # INT2CHAR ###########################
 def handle_int2char(arguments):
-    pass
-    # TODO
+    if len(arguments) != 2:
+        exit(32)
+
+    # arg1
+    whole_var = check_var(arguments[1])
+
+    frame = whole_var[0]
+    variable_name = whole_var[1]
+
+    check_frame(frame, variable_name)      # check if variable exist
+    
+    # arg2 
+    symb2 = check_symb(arguments[2])
+    type2 = symb2[0]
+    value2 = symb2[1]
+
+    if type2 != "int":
+        exit(53)
+
+    if value2 > 1114111 or value2 < 0:
+        exit(58)
+
+    update_frame(frame, variable_name, ["string", chr(value2)])
 
 
 # INT2CHAR ###########################
 def handle_str2int(arguments):
-    pass
-    # TODO
+    if len(arguments) != 3:
+        exit(32)
+
+    # arg1
+    whole_var = check_var(arguments[1])
+
+    frame = whole_var[0]
+    variable_name = whole_var[1]
+
+    check_frame(frame, variable_name)      # check if variable exist
     
+    # arg2 
+    symb2 = check_symb(arguments[2])
+    type2 = symb2[0]
+    value2 = symb2[1]
+    # arg3 
+    symb3 = check_symb(arguments[3])
+    type3 = symb3[0]
+    value3 = symb3[1]
+
+    if type2 != "string":
+        exit(53)
+
+    if type3 != "int":
+        exit(53)
+
+    if len(value2) - 1 < value3 or value3 < 0:
+        exit(58)
+
+    update_frame(frame, variable_name, ["int", ord(value2[value3])])
+
 
 # 6.4.4 ######################################################################
 # READ ###############################
@@ -721,9 +789,12 @@ def handle_read(arguments):
     
     # arg2
     if arguments[2][0] != "type":
+        print("nespravny typ")
         exit(32)
 
     new_type = arguments[2][1]
+    print(arguments[2])
+    print("typ:", new_type)
 
     if new_type == "int":
         try:
@@ -741,6 +812,7 @@ def handle_read(arguments):
             readed_line = "false"
 
     else:
+        print("chyba handle read")
         exit(32)
 
     update_frame(frame, variable_name, [new_type, readed_line])
@@ -979,6 +1051,39 @@ def handle_exit(arguments):
     exit(value1)
 
 
+# 6.4.7 ######################################################################
+# DPRINT #############################
+def handle_dprint(arguments):
+    if len(arguments) != 1:
+        exit(32)
+
+    symb1 = check_symb(arguments[1])
+    value1 = symb1[1]
+
+    print(value1, file=stderr)
+
+
+# BREAK #############################
+def handle_break(arguments):
+    global instruction_counter
+    global global_frame
+    global temporary_frame
+    global local_frame
+    global calling_stack
+    global data_stack
+    global label_dict
+    
+    if len(arguments) != 0:
+        exit(32)
+
+    print("Actual instruction:", instruction_counter, file=stderr)
+    print("Global frame:", global_frame, file=stderr)
+    print("Temporary frame:", temporary_frame, file=stderr)
+    print("Local frame:", local_frame, file=stderr)
+    print("Calling stack:", calling_stack, file=stderr)
+    print("Data stack:", data_stack, file=stderr)
+    print("All reachable labels:", label_dict, file=stderr)
+
 ###################################################################
 # main handling instructions
 ###################################################################
@@ -1132,14 +1237,15 @@ def instruction_switch(instruction):
         handle_jump_if(arguments, "!=")
 
     elif opcode == "EXIT":
-        pass
+        handle_exit(arguments)
         
     ###########
     # 6.4.8 ladiace instrukcie
     elif opcode == "DPRINT":
-        pass
+        handle_dprint(arguments)
+
     elif opcode == "BREAK":
-        pass
+        handle_break(arguments)
 
     else:
         exit(32)
@@ -1157,12 +1263,19 @@ def handle_instructions(program):
     program = get_program_dictionary(program) 
 
     get_labels(program)
+
+    print(program)
+    print(program[2][1][2][1])
     
     while instruction_counter <= top_order:
 
         instruction_switch(program[instruction_counter])
 
         instruction_counter += 1
+
+
+
+
 
 
 
@@ -1186,4 +1299,23 @@ if arguments_dic["input"] == True:
 program = ET.fromstring(src_file)
 
 handle_instructions(program)
+
+
+"""for instruction in program:
+    print("Instruction", instruction.attrib["order"])
+    print(instruction.attrib["opcode"])
+    print("Len(instruction):", len(instruction))
+    # print(instruction[0].text)
+    for argument in instruction:
+        print("Arg", argument.tag[-1])
+        print(argument.attrib)
+        print(argument.text)"""
+
+print("\nGF:",global_frame)
+print("Labels:", label_dict)
+
+
+
+
+
 
