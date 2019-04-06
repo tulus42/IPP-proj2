@@ -113,6 +113,7 @@ def check_arguments(argv):
         if argv[1] == "--help":
             print("some helpful instructions to use program")
             arguments_dic["help"] = True
+            exit(0)
 
         else:
             arguments_dic = check_arguments2(argv, arguments_dic) 
