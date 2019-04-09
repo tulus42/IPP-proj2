@@ -405,7 +405,7 @@ def handle_move(arguments):
     symb2 = check_symb(arguments[2])     # get value from 2. argument
     type2 = symb2[0]
     value2 = symb2[1]
-    print(symb2)
+    # print(symb2)
     
     check_frame(frame1, variable1)      # check if variable exist
     
@@ -732,6 +732,8 @@ def handle_int2char(arguments):
     if type2 != "int":
         exit(53)
 
+    value2 = int(value2)
+
     if value2 > 1114111 or value2 < 0:
         exit(58)
 
@@ -794,8 +796,8 @@ def handle_read(arguments):
         exit(32)
 
     new_type = arguments[2][1]
-    print(arguments[2])
-    print("typ:", new_type)
+    # print(arguments[2])
+    # print("typ:", new_type)
 
     if new_type == "int":
         try:
@@ -1265,8 +1267,6 @@ def handle_instructions(program):
 
     get_labels(program)
 
-    print(program)
-    print(program[2][1][2][1])
     
     while instruction_counter <= top_order:
 
@@ -1312,8 +1312,8 @@ handle_instructions(program)
         print(argument.attrib)
         print(argument.text)"""
 
-print("\nGF:",global_frame)
-print("Labels:", label_dict)
+# print("\nGF:",global_frame)
+# print("Labels:", label_dict)
 
 
 

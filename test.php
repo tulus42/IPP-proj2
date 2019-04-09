@@ -43,11 +43,18 @@ function handle_arguments($argvs) {
 
                 case (preg_match('/--directory=.*/', $argvs[$i]) ? true : false) :
                     $directory_path_arg = is_param($directory_path_arg);
-                    $path = preg_replace('/--directory=/', '', $directory_path_arg);
 
-                    if(preg_match('#^(\w+/){1,2}\w+\.\w+$#',$path)) {
-                        echo $path;  // valid path.
+                    $path = preg_replace('/--directory=/', '', $argvs[$i]);
+
+                    if (substr($path, -1) != "/") {
+                        $path = $path."/";
+                    }
+
+                    if(is_dir($path)) {
+                        echo "dir path: ".$path."\n";  // valid path.
+                        $GLOBALS['directory_path'] = $path;
                     }else{
+                        echo "nespravna cesta\n";
                         exit(10); // invalid path
                     }
                      
@@ -126,23 +133,182 @@ function show_help() {
 }
 
 
+
+function get_src_file() {
+    return "test1";
+}
+
+function get_input_file() {
+    return "test1";
+}
+
+
+function rglob($pattern, $flags = 0) {
+    $files = glob($pattern, $flags); 
+    foreach (glob(dirname($pattern).'/*', GLOB_ONLYDIR|GLOB_NOSORT) as $dir) {
+        $files = array_merge($files, rglob($dir.'/'.basename($pattern), $flags));
+    }
+    return $files;
+}
+
+// RETURN VALUE
+function check_return_val($ret_val, $file_name) {
+    $file_name = str_replace(".src", ".rc", $file_name);
+
+    echo $file_name."\n";
+
+    if (file_exists($file_name)) {
+        $fh = fopen($file_name, 'r');
+    } else {
+        $fh = fopen($file_name, 'w+');
+        fwrite($fh, 0);
+        fclose($fh);
+
+        $fh = fopen($file_name, 'r');
+    }
+
+    echo "checking returning value\n";
+    $file_ret = fread($fh, filesize($file_name));
+    var_dump($file_ret);
+
+    fclose($fh);
+
+    if ($file_ret == $ret_val) {
+        echo "RETURN VALUE:     CORRECT\n";
+        return TRUE;
+    } else {
+        echo "RETURN VALUE:     WRONG\n";
+        return FALSE;
+    }
+}
+
+
+// OUTPUT
+function check_output_int($program_out, $file_name) {
+    $file_name = str_replace(".src", ".out", $file_name);
+
+    echo $file_name."\n";
+
+    if (file_exists($file_name)) {
+
+    } else {
+        $fh = fopen($file_name, 'w+');
+        fclose($fh);
+    }
+
+    $file_out = file_get_contents($file_name);
+
+    var_dump($file_out);
+
+    $tmp = "";
+    foreach ($program_out as $i) {
+        $tmp = $tmp.$i;
+    }
+    $program_out = $tmp;
+
+    // echo "PROGRAM OUTPUT: ".$program_out."\n";
+    // echo "FILE OUTPUT:    ".$file_out."\n";
+    // var_dump($program_out);
+    // var_dump($file_out);
+
+    if (md5($program_out) == md5_file($file_name)) {
+        echo "OUTPUT:     CORRECT\n";
+        return TRUE;
+    } else {
+        echo "OUTPUT:     WRONG\n";
+        return FALSE;
+    }
+
+
+}
+
+// OUTPUT
+function check_output_parse($output, $file_name) {
+    $file_name = str_replace(".src", ".rc", $file_name);
+
+    echo $file_name."\n";
+
+    if (file_exists($file_name)) {
+        $fh = fopen($file_name, 'r');
+    } else {
+        $fh = fopen($file_name, 'w+');
+        fclose($fh);
+
+        $fh = fopen($file_name, 'r');
+    }
+
+    $file_out = fread($fh, filesize($file_name));
+    var_dump($file_out);
+
+    fclose($fh);
+}
+
+
 ///////////////////////////////////////////////////////
 // PARSE TESTS
 ///////////////////////////////////////////////////////
 function run_all_parse_tests($exec_file) {
     $arguments = $GLOBALS['arguments'];
+    $dir_path = $GLOBALS['directory_path']; 
+
 
     if ($arguments[2]) {
         echo "making no parse tests\n";
         return;
     }
 
-    $source_file = get_src_file();
 
-    $output = shell_exec('php7.2 '.$exec_file.' < '.$source_file);
-    echo "<pre>$output</pre>";
+    foreach (glob("*.src") as $source_file) {
+        $output1 = "";
+
+        $output = exec('php7.2 '.$exec_file.' < '.$source_file, $output1, $return_var);
+        echo "<pre>$output</pre>\n";
+        
+    }
+
+    // recurslive == false
+    if ($arguments[0] == FALSE) {
+        foreach (glob($dir_path."*.src") as $source_file) {
+            $input_file = get_input_file();
+
+            echo $source_file;
+            $output = "";
+
+            exec('php7.2 '.$exec_file.' < '.$source_file, $output, $return_var);
+            
+            echo $source_file;
+
+            echo "<pre>$output</pre>\n";
+            echo "returned: ".$return_var;
+
+            check_return_val($return_var, $source_file);
+            check_output_parse($output, $source_file);
+            
+        }
+
+    // recursive == true
+    } else {
+        $files = rglob($dir_path."*.src");
+        var_dump($files);
+
+        foreach($files as $source_file) {
+            $input_file = get_input_file();
+
+            echo $source_file;
+            $output = "";
+
+            exec('php7.2 '.$exec_file.' < '.$source_file, $output, $return_var);
+            echo "<pre>$output</pre>\n";
+
+            check_return_val($return_var, $source_file);
+            check_output_parse($output, $source_file);
+
+        }
+    }
+    
 
 }
+
 
 
 ///////////////////////////////////////////////////////
@@ -150,15 +316,55 @@ function run_all_parse_tests($exec_file) {
 ///////////////////////////////////////////////////////
 function run_all_int_tests($exec_file) {
     $arguments = $GLOBALS['arguments'];
+    $dir_path = $GLOBALS['directory_path']; 
 
     if ($arguments[1]) {
         echo "making no interpret tests\n";
         return;
     }
     
-    $output = shell_exec('python3.6 '.$exec_file.' --source='.$source_file.' --input='.$input_file);
-    echo "<pre>$output</pre>";
-    
+
+    echo $exec_file."\n";
+    echo "directory: ".$dir_path."\n";
+
+
+    // recurslive == false
+    if ($arguments[0] == FALSE) {
+        foreach (glob($dir_path."*.src") as $source_file) {
+            $input_file = get_input_file();
+            $output = "";
+
+            echo "source file: ".$source_file."\n";
+            
+            exec('python3.6 '.$exec_file.' --source='.$source_file.' --input='.$input_file, $output, $return_var);
+
+            echo "source file: ".$source_file."\n";
+
+            var_dump($output);
+            
+            check_return_val($return_var, $source_file);
+            check_output_int($output, $source_file);
+
+        }
+
+    // recursive == true
+    } else {
+        $files = rglob($dir_path."*.src");
+        var_dump($files);
+
+        foreach($files as $source_file) {
+            $input_file = get_input_file();
+
+            echo $source_file;
+
+            exec('python3.6 '.$exec_file.' --source='.$source_file.' --input='.$input_file, $output, $return_var);
+            var_dump($output);
+
+            check_return_val($return_var, $source_file);
+            check_output_int($output, $source_file);
+
+        }
+    }
 }
 
 
@@ -169,8 +375,8 @@ function run_all_int_tests($exec_file) {
 ///////////////////////////////////////////////////////
 // MAIN
 ///////////////////////////////////////////////////////
-$parse_file = "";
-$interpret_file = "";
+$parse_file = "parse.php";
+$interpret_file = "interpret.py";
 $directory_path = "";
 
 //              recursive,parse,int    //
@@ -181,9 +387,5 @@ handle_arguments($argv);
 run_all_parse_tests($parse_file);
 
 run_all_int_tests($interpret_file);
-
-
-
-
 
 ?>
