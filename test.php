@@ -14,8 +14,6 @@ function handle_arguments($argvs) {
     $parse_only_arg = FALSE;
     $int_only_arg = FALSE;
 
-    echo "argc: ".$argc."\n";
-
     // no arguments -> ok, else:
     if ($argc != 1) {
         // 1 argument -> --help or --stats=file
@@ -100,7 +98,7 @@ function handle_arguments($argvs) {
     }
 
     if ($directory_path_arg == FALSE) {
-        $GLOBALS['directory_path'] = getcwd();
+        $GLOBALS['directory_path'] = "";
     }
 
     if ($int_script_file_arg == FALSE) {
@@ -183,7 +181,7 @@ function check_return_val($ret_val, $file_name) {
 }
 
 
-// OUTPUT
+// OUTPUT INT
 function check_output_int($program_out, $file_name) {
     $file_name = str_replace(".src", ".out", $file_name);
 
@@ -222,9 +220,9 @@ function check_output_int($program_out, $file_name) {
 
 }
 
-// OUTPUT
-function check_output_parse($output, $file_name) {
-    $file_name = str_replace(".src", ".rc", $file_name);
+// OUTPUT PARSE
+function check_output_parse($program_output, $file_name) {
+    $file_name = str_replace(".src", ".out", $file_name);
 
     echo $file_name."\n";
 
@@ -241,6 +239,23 @@ function check_output_parse($output, $file_name) {
     var_dump($file_out);
 
     fclose($fh);
+
+    $tmp_file = "tmp_file";
+    $file1 = "tmp_file1";
+    file_put_contents($file1, $program_output);
+
+    exec("java -jar /pub/courses/ipp/jexamxml/jexamxml.jar ".$file1." ".$file_name." > ".$tmp_file);
+
+    $tmp_file = file_get_contents($tmp_file);
+
+    if (strpos($tmp_file, "Two files are identical") != FALSE) {
+        echo "OUTPUT:     CORRECT\n";
+        return TRUE;
+    } else {
+        echo "OUTPUT:     WRONG\n";
+        return FALSE;
+    }
+
 }
 
 
@@ -257,6 +272,7 @@ function run_all_parse_tests($exec_file) {
         return;
     }
 
+    $GLOBALS['html_code'] .=  "        <h2 style=\"color: indigo\">Parsing tests:</h2>";
 
     foreach (glob("*.src") as $source_file) {
         $output1 = "";
@@ -268,6 +284,7 @@ function run_all_parse_tests($exec_file) {
 
     // recurslive == false
     if ($arguments[0] == FALSE) {
+
         foreach (glob($dir_path."*.src") as $source_file) {
             $input_file = get_input_file();
 
@@ -281,9 +298,10 @@ function run_all_parse_tests($exec_file) {
             echo "<pre>$output</pre>\n";
             echo "returned: ".$return_var;
 
-            check_return_val($return_var, $source_file);
-            check_output_parse($output, $source_file);
+            $ret_val = check_return_val($return_var, $source_file);
+            $out_val = check_output_parse($output, $source_file);
             
+            html_element($ret_val, $out_val, $source_file, $return_var);
         }
 
     // recursive == true
@@ -300,13 +318,13 @@ function run_all_parse_tests($exec_file) {
             exec('php7.2 '.$exec_file.' < '.$source_file, $output, $return_var);
             echo "<pre>$output</pre>\n";
 
-            check_return_val($return_var, $source_file);
-            check_output_parse($output, $source_file);
+            $ret_val = check_return_val($return_var, $source_file);
+            $out_val = check_output_parse($output, $source_file);
+
+            html_element($ret_val, $out_val, $source_file, $return_var);
 
         }
     }
-    
-
 }
 
 
@@ -323,6 +341,7 @@ function run_all_int_tests($exec_file) {
         return;
     }
     
+    $GLOBALS['html_code'] .=  "        <h2 style=\"color: indigo\">Interpreting tests:</h2>";
 
     echo $exec_file."\n";
     echo "directory: ".$dir_path."\n";
@@ -342,9 +361,10 @@ function run_all_int_tests($exec_file) {
 
             var_dump($output);
             
-            check_return_val($return_var, $source_file);
-            check_output_int($output, $source_file);
+            $ret_val = check_return_val($return_var, $source_file);
+            $out_val = check_output_int($output, $source_file);
 
+            html_element($ret_val, $out_val, $source_file, $return_var);
         }
 
     // recursive == true
@@ -360,17 +380,62 @@ function run_all_int_tests($exec_file) {
             exec('python3.6 '.$exec_file.' --source='.$source_file.' --input='.$input_file, $output, $return_var);
             var_dump($output);
 
-            check_return_val($return_var, $source_file);
-            check_output_int($output, $source_file);
+            $ret_val = check_return_val($return_var, $source_file);
+            $out_val = check_output_int($output, $source_file);
 
+            html_element($ret_val, $out_val, $source_file, $return_var);
         }
     }
 }
 
 
 
+///////////////////////////////////////////////////////
+// HTML
+///////////////////////////////////////////////////////
+function html_header() {
+    return "<!DOCTYPE html>
+    <html lang=\"en\">
+        <head>
+            <meta charset=\"UTF-8\">
+            <title>Testing log</title>
+        </head>
+        <body>
+            <h1 style=\"text-align: center; color: darkred\">Testing log</h1>";
+}
 
 
+function html_element($ret_val, $out_val, $source_file, $return_var) {
+    echo "ret:".$ret_val;
+    echo "out:".$out_val;
+    if ($ret_val && ($return_var != 0)) {
+        $GLOBALS['html_code'] .= "<h3 style=\"color:limegreen\">".$source_file."</h3>
+        <p style=\"margin-left: 60px; color:limegreen\">Returned value: CORRECT - non 0</p>
+        <p style=\"margin-left: 60px; color:limegreen\">Output value: NONE</p>";
+    } elseif ($ret_val) {
+        if ($out_val) {
+            $GLOBALS['html_code'] .= "<h3 style=\"color:limegreen\">".$source_file."</h3>
+            <p style=\"margin-left: 60px; color:limegreen\">Returned value: CORRECT</p>
+            <p style=\"margin-left: 60px; color:limegreen\">Output value: CORRECT</p>";
+        } else {
+            $GLOBALS['html_code'] .= "<h3 style=\"color:red\">".$source_file."</h3>
+            <p style=\"margin-left: 60px; color:limegreen\">Returned value: CORRECT</p>
+            <p style=\"margin-left: 60px; color:red\">Output value: FAIL</p>";
+        }
+    } else {
+        $GLOBALS['html_code'] .= "<h3 style=\"color:red\">".$source_file."</h3>
+        <p style=\"margin-left: 60px; color:red\">Returned value: FAIL</p>
+        <p style=\"margin-left: 60px; color:red\">Output value: NONE</p>";
+    }
+}
+
+
+function end_html($string) {
+    $string .= "\n    </body>
+    </html>";
+
+    file_put_contents("htmllog.html", $string);
+}
 
 ///////////////////////////////////////////////////////
 // MAIN
@@ -382,10 +447,16 @@ $directory_path = "";
 //              recursive,parse,int    //
 $arguments = array(FALSE, FALSE, FALSE);
 
+$html_code = html_header();
+
+
 handle_arguments($argv);
 
 run_all_parse_tests($parse_file);
 
 run_all_int_tests($interpret_file);
+
+
+end_html($html_code);
 
 ?>
