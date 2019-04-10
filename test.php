@@ -132,12 +132,16 @@ function show_help() {
 
 
 
-function get_src_file() {
-    return "test1";
-}
-
-function get_input_file() {
-    return "test1";
+function get_input_file($source_file) {
+    $file_name = str_replace(".src", ".in", $source_file);
+    
+    if (file_exists($file_name)) {
+        return $file_name;
+    } else {
+        $fh = fopen($file_name, 'w+');
+        fclose($fh);
+        return $file_name;
+    }
 }
 
 
@@ -286,7 +290,7 @@ function run_all_parse_tests($exec_file) {
     if ($arguments[0] == FALSE) {
 
         foreach (glob($dir_path."*.src") as $source_file) {
-            $input_file = get_input_file();
+            $input_file = get_input_file($source_file);
 
             echo $source_file;
             $output = "";
@@ -310,7 +314,7 @@ function run_all_parse_tests($exec_file) {
         var_dump($files);
 
         foreach($files as $source_file) {
-            $input_file = get_input_file();
+            $input_file = get_input_file($source_file);
 
             echo $source_file;
             $output = "";
@@ -350,12 +354,12 @@ function run_all_int_tests($exec_file) {
     // recurslive == false
     if ($arguments[0] == FALSE) {
         foreach (glob($dir_path."*.src") as $source_file) {
-            $input_file = get_input_file();
+            $input_file = get_input_file($source_file);
             $output = "";
 
             echo "source file: ".$source_file."\n";
             
-            exec('python3.6 '.$exec_file.' --source='.$source_file.' --input='.$input_file, $output, $return_var);
+            exec('python3.6 "'.$exec_file.'" --source="'.$source_file.'" --input="'.$input_file.'"', $output, $return_var);
 
             echo "source file: ".$source_file."\n";
 
@@ -373,11 +377,12 @@ function run_all_int_tests($exec_file) {
         var_dump($files);
 
         foreach($files as $source_file) {
-            $input_file = get_input_file();
+            $input_file = get_input_file($source_file);
+            $output = "";
 
             echo $source_file;
 
-            exec('python3.6 '.$exec_file.' --source='.$source_file.' --input='.$input_file, $output, $return_var);
+            exec('python3.6 "'.$exec_file.'" --source="'.$source_file.'" --input="'.$input_file.'"', $output, $return_var);
             var_dump($output);
 
             $ret_val = check_return_val($return_var, $source_file);
@@ -412,26 +417,39 @@ function html_element($ret_val, $out_val, $source_file, $return_var) {
         $GLOBALS['html_code'] .= "<h3 style=\"color:limegreen\">".$source_file."</h3>
         <p style=\"margin-left: 60px; color:limegreen\">Returned value: CORRECT - non 0</p>
         <p style=\"margin-left: 60px; color:limegreen\">Output value: NONE</p>";
+
+        $GLOBALS['correct_test_counter'] += 1;
+
     } elseif ($ret_val) {
         if ($out_val) {
             $GLOBALS['html_code'] .= "<h3 style=\"color:limegreen\">".$source_file."</h3>
             <p style=\"margin-left: 60px; color:limegreen\">Returned value: CORRECT</p>
             <p style=\"margin-left: 60px; color:limegreen\">Output value: CORRECT</p>";
+
+            $GLOBALS['correct_test_counter'] += 1;
+            
         } else {
             $GLOBALS['html_code'] .= "<h3 style=\"color:red\">".$source_file."</h3>
             <p style=\"margin-left: 60px; color:limegreen\">Returned value: CORRECT</p>
             <p style=\"margin-left: 60px; color:red\">Output value: FAIL</p>";
         }
+
     } else {
         $GLOBALS['html_code'] .= "<h3 style=\"color:red\">".$source_file."</h3>
-        <p style=\"margin-left: 60px; color:red\">Returned value: FAIL</p>
+        <p style=\"margin-left: 60px; color:red\">Returned value: FAIL - returned: ".$return_var."</p>
         <p style=\"margin-left: 60px; color:red\">Output value: NONE</p>";
     }
+
+    $GLOBALS['test_counter'] += 1;
 }
 
 
 function end_html($string) {
-    $string .= "\n    </body>
+    $res = ($GLOBALS['correct_test_counter'] / $GLOBALS['test_counter']) * 100;
+    $string .= "        <h2 style=\"color: indigo\">Results: ".round($res,2)."%</h2>
+    <p style=\"margin-left: 60px\">Succesfull tests: ".$GLOBALS['correct_test_counter']."</p>
+    <p style=\"margin-left: 60px\">All tests: ".$GLOBALS['test_counter']."</p>
+    \n    </body>
     </html>";
 
     file_put_contents("htmllog.html", $string);
@@ -443,6 +461,9 @@ function end_html($string) {
 $parse_file = "parse.php";
 $interpret_file = "interpret.py";
 $directory_path = "";
+
+$test_counter = 0;
+$correct_test_counter = 0;
 
 //              recursive,parse,int    //
 $arguments = array(FALSE, FALSE, FALSE);
