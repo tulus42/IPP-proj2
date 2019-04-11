@@ -26,17 +26,14 @@ function handle_arguments($argvs) {
             switch($argvs[$i]) {
                 case "--recursive":
                     $recursive_arg = is_param($recursive_arg);
-                    echo "recursive\n";
                     break;
 
                 case "--parse-only":
                     $parse_only_arg = is_param($parse_only_arg);
-                    echo "parse only\n";
                     break;
 
                 case "--int-only":
                     $int_only_arg = is_param($int_only_arg);
-                    echo "int only\n";
                     break;
 
                 case (preg_match('/--directory=.*/', $argvs[$i]) ? true : false) :
@@ -49,7 +46,6 @@ function handle_arguments($argvs) {
                     }
 
                     if(is_dir($path)) {
-                        echo "dir path: ".$path."\n";  // valid path.
                         $GLOBALS['directory_path'] = $path;
                     }else{
                         echo "nespravna cesta\n";
@@ -127,7 +123,7 @@ function is_param($param) {
 
 
 function show_help() {
-    echo "some helpful information\n";
+    echo "some helpful information\n";      // TODO
 }
 
 
@@ -157,8 +153,6 @@ function rglob($pattern, $flags = 0) {
 function check_return_val($ret_val, $file_name) {
     $file_name = str_replace(".src", ".rc", $file_name);
 
-    echo $file_name."\n";
-
     if (file_exists($file_name)) {
         $fh = fopen($file_name, 'r');
     } else {
@@ -169,17 +163,13 @@ function check_return_val($ret_val, $file_name) {
         $fh = fopen($file_name, 'r');
     }
 
-    echo "checking returning value\n";
     $file_ret = fread($fh, filesize($file_name));
-    var_dump($file_ret);
 
     fclose($fh);
 
     if ($file_ret == $ret_val) {
-        echo "RETURN VALUE:     CORRECT\n";
         return TRUE;
     } else {
-        echo "RETURN VALUE:     WRONG\n";
         return FALSE;
     }
 }
@@ -188,8 +178,6 @@ function check_return_val($ret_val, $file_name) {
 // OUTPUT INT
 function check_output_int($program_out, $file_name) {
     $file_name = str_replace(".src", ".out", $file_name);
-
-    echo $file_name."\n";
 
     if (file_exists($file_name)) {
 
@@ -200,24 +188,16 @@ function check_output_int($program_out, $file_name) {
 
     $file_out = file_get_contents($file_name);
 
-    var_dump($file_out);
-
     $tmp = "";
     foreach ($program_out as $i) {
         $tmp = $tmp.$i;
     }
     $program_out = $tmp;
 
-    // echo "PROGRAM OUTPUT: ".$program_out."\n";
-    // echo "FILE OUTPUT:    ".$file_out."\n";
-    // var_dump($program_out);
-    // var_dump($file_out);
 
     if (md5($program_out) == md5_file($file_name)) {
-        echo "OUTPUT:     CORRECT\n";
         return TRUE;
     } else {
-        echo "OUTPUT:     WRONG\n";
         return FALSE;
     }
 
@@ -227,8 +207,6 @@ function check_output_int($program_out, $file_name) {
 // OUTPUT PARSE
 function check_output_parse($program_output, $file_name) {
     $file_name = str_replace(".src", ".out", $file_name);
-
-    echo $file_name."\n";
 
     if (file_exists($file_name)) {
         $fh = fopen($file_name, 'r');
@@ -240,7 +218,6 @@ function check_output_parse($program_output, $file_name) {
     }
 
     $file_out = fread($fh, filesize($file_name));
-    var_dump($file_out);
 
     fclose($fh);
 
@@ -253,10 +230,8 @@ function check_output_parse($program_output, $file_name) {
     $tmp_file = file_get_contents($tmp_file);
 
     if (strpos($tmp_file, "Two files are identical") != FALSE) {
-        echo "OUTPUT:     CORRECT\n";
         return TRUE;
     } else {
-        echo "OUTPUT:     WRONG\n";
         return FALSE;
     }
 
@@ -270,21 +245,13 @@ function run_all_parse_tests($exec_file) {
     $arguments = $GLOBALS['arguments'];
     $dir_path = $GLOBALS['directory_path']; 
 
-
+    // int-only
     if ($arguments[2]) {
-        echo "making no parse tests\n";
         return;
     }
 
     $GLOBALS['html_code'] .=  "        <h2 style=\"color: indigo\">Parsing tests:</h2>";
 
-    foreach (glob("*.src") as $source_file) {
-        $output1 = "";
-
-        $output = exec('php7.2 '.$exec_file.' < '.$source_file, $output1, $return_var);
-        echo "<pre>$output</pre>\n";
-        
-    }
 
     // recurslive == false
     if ($arguments[0] == FALSE) {
@@ -292,15 +259,10 @@ function run_all_parse_tests($exec_file) {
         foreach (glob($dir_path."*.src") as $source_file) {
             $input_file = get_input_file($source_file);
 
-            echo $source_file;
             $output = "";
 
-            exec('php7.2 '.$exec_file.' < '.$source_file, $output, $return_var);
+            exec('php7.3 '.$exec_file.' < '.$source_file, $output, $return_var);
             
-            echo $source_file;
-
-            echo "<pre>$output</pre>\n";
-            echo "returned: ".$return_var;
 
             $ret_val = check_return_val($return_var, $source_file);
             $out_val = check_output_parse($output, $source_file);
@@ -311,16 +273,13 @@ function run_all_parse_tests($exec_file) {
     // recursive == true
     } else {
         $files = rglob($dir_path."*.src");
-        var_dump($files);
 
         foreach($files as $source_file) {
             $input_file = get_input_file($source_file);
 
-            echo $source_file;
             $output = "";
 
-            exec('php7.2 '.$exec_file.' < '.$source_file, $output, $return_var);
-            echo "<pre>$output</pre>\n";
+            exec('php7.3 '.$exec_file.' < '.$source_file, $output, $return_var);
 
             $ret_val = check_return_val($return_var, $source_file);
             $out_val = check_output_parse($output, $source_file);
@@ -340,15 +299,14 @@ function run_all_int_tests($exec_file) {
     $arguments = $GLOBALS['arguments'];
     $dir_path = $GLOBALS['directory_path']; 
 
+
+    // parse-only
     if ($arguments[1]) {
-        echo "making no interpret tests\n";
         return;
     }
     
     $GLOBALS['html_code'] .=  "        <h2 style=\"color: indigo\">Interpreting tests:</h2>";
 
-    echo $exec_file."\n";
-    echo "directory: ".$dir_path."\n";
 
 
     // recurslive == false
@@ -357,13 +315,8 @@ function run_all_int_tests($exec_file) {
             $input_file = get_input_file($source_file);
             $output = "";
 
-            echo "source file: ".$source_file."\n";
             
             exec('python3.6 "'.$exec_file.'" --source="'.$source_file.'" --input="'.$input_file.'"', $output, $return_var);
-
-            echo "source file: ".$source_file."\n";
-
-            var_dump($output);
             
             $ret_val = check_return_val($return_var, $source_file);
             $out_val = check_output_int($output, $source_file);
@@ -374,16 +327,12 @@ function run_all_int_tests($exec_file) {
     // recursive == true
     } else {
         $files = rglob($dir_path."*.src");
-        var_dump($files);
 
         foreach($files as $source_file) {
             $input_file = get_input_file($source_file);
             $output = "";
 
-            echo $source_file;
-
             exec('python3.6 "'.$exec_file.'" --source="'.$source_file.'" --input="'.$input_file.'"', $output, $return_var);
-            var_dump($output);
 
             $ret_val = check_return_val($return_var, $source_file);
             $out_val = check_output_int($output, $source_file);
@@ -411,8 +360,6 @@ function html_header() {
 
 
 function html_element($ret_val, $out_val, $source_file, $return_var) {
-    echo "ret:".$ret_val;
-    echo "out:".$out_val;
     if ($ret_val && ($return_var != 0)) {
         $GLOBALS['html_code'] .= "<h3 style=\"color:limegreen\">".$source_file."</h3>
         <p style=\"margin-left: 60px; color:limegreen\">Returned value: CORRECT - non 0</p>
